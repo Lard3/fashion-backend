@@ -2,6 +2,7 @@ import io
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
+from rembg import remove
 import os
 from supabase import create_client, Client
 from openai import OpenAI
@@ -9,7 +10,7 @@ from openai import OpenAI
 # Inicializar FastAPI
 app = FastAPI(title="Fashion AI Backend", version="1.0.0")
 
-# Configurar CORS para permitir peticiones desde cualquier origen
+# Configurar CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -37,22 +38,25 @@ async def process_garment(user_id: str = Form(...), file: UploadFile = File(...)
         # 1. Leer los bytes de la imagen subida
         input_image_bytes = await file.read()
         
-        # 2. Abrir con Pillow y redimensionar para optimizar
+        # 2. Abrir con Pillow y redimensionar para ahorrar memoria RAM y evitar 502
         image = Image.open(io.BytesIO(input_image_bytes))
         image.thumbnail((800, 800))
         
         img_byte_arr = io.BytesIO()
         img_format = image.format if image.format and image.format in ["JPEG", "PNG"] else "JPEG"
         image.save(img_byte_arr, format=img_format)
-        output_image_bytes = img_byte_arr.getvalue()
+        input_image_bytes = img_byte_arr.getvalue()
         
-        # 3. Subir la imagen procesada a Supabase Storage (Bucket: wardrobe-images)
+        # 3. Quitar el fondo con rembg de forma optimizada
+        output_image_bytes = remove(input_image_bytes)
+        
+        # 4. Subir la imagen procesada a Supabase Storage (Bucket: wardrobe-images)
         file_name = f"{user_id}/{os.urandom(8).hex()}.png"
         image_url = None
         
         if supabase:
             try:
-                res = supabase.storage.from_("wardrobe-images").upload(
+                supabase.storage.from_("wardrobe-images").upload(
                     file_name,
                     output_image_bytes,
                     file_options={"content-type": "image/png"}
