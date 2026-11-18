@@ -113,7 +113,7 @@ async def generate_looks(garment_id: str = Form(...)):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-        
-  if __name__ == "__main__":
+
+if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8080)
